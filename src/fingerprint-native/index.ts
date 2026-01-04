@@ -98,13 +98,27 @@ const getPrevFP = async () => {
       info.previousCommit = stdout.trim()
     }
   } else if (profile === 'production') {
-    // Fetch tags first to ensure they're available
-    await exec('git fetch --tags')
+    // Fetch tags from origin to ensure they're available (GitHub Actions uses shallow clones)
+    // Fetch from origin explicitly to get all tags
+    await exec('git fetch origin --tags --force')
 
-    // Try with explicit tag reference format
-    const {stdout, exitCode} = await getExecOutput(
+    // Try with explicit tag reference format first, then fallback to just the tag name
+    let stdout: string
+    let exitCode: number
+
+    const result1 = await getExecOutput(
       `git rev-parse refs/tags/${previousCommitTag}`,
     )
+
+    if (result1.exitCode !== 0) {
+      // Fallback: try without refs/tags/ prefix
+      const result2 = await getExecOutput(`git rev-parse ${previousCommitTag}`)
+      stdout = result2.stdout
+      exitCode = result2.exitCode
+    } else {
+      stdout = result1.stdout
+      exitCode = result1.exitCode
+    }
 
     if (exitCode !== 0) {
       setFailed(`Tag '${previousCommitTag}' not found. Aborting.`)
