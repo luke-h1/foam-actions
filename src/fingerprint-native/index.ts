@@ -102,26 +102,39 @@ const getPrevFP = async () => {
     // Fetch from origin explicitly to get all tags
     await exec('git fetch origin --tags --force')
 
-    // Try with explicit tag reference format first, then fallback to just the tag name
-    let stdout: string
-    let exitCode: number
+    // Try multiple tag variations: with/without v prefix, with/without refs/tags/
+    const tagVariations = [
+      previousCommitTag, // As provided
+      previousCommitTag.startsWith('v')
+        ? previousCommitTag.slice(1) // Remove v if present
+        : `v${previousCommitTag}`, // Add v if not present
+    ]
 
-    const result1 = await getExecOutput(
-      `git rev-parse refs/tags/${previousCommitTag}`,
-    )
+    let stdout: string | undefined
+    let exitCode: number = 1
 
-    if (result1.exitCode !== 0) {
-      // Fallback: try without refs/tags/ prefix
-      const result2 = await getExecOutput(`git rev-parse ${previousCommitTag}`)
-      stdout = result2.stdout
-      exitCode = result2.exitCode
-    } else {
-      stdout = result1.stdout
-      exitCode = result1.exitCode
+    for (const tag of tagVariations) {
+      // Try with refs/tags/ prefix first
+      const result1 = await getExecOutput(`git rev-parse refs/tags/${tag}`)
+      if (result1.exitCode === 0) {
+        stdout = result1.stdout
+        exitCode = 0
+        break
+      }
+
+      // Try without refs/tags/ prefix
+      const result2 = await getExecOutput(`git rev-parse ${tag}`)
+      if (result2.exitCode === 0) {
+        stdout = result2.stdout
+        exitCode = 0
+        break
+      }
     }
 
-    if (exitCode !== 0) {
-      setFailed(`Tag '${previousCommitTag}' not found. Aborting.`)
+    if (exitCode !== 0 || !stdout) {
+      setFailed(
+        `Tag '${previousCommitTag}' (or 'v${previousCommitTag}') not found. Aborting.`,
+      )
       return false
     }
 
