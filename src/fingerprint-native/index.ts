@@ -98,12 +98,16 @@ const getPrevFP = async () => {
       info.previousCommit = stdout.trim()
     }
   } else if (profile === 'production') {
+    // Fetch tags first to ensure they're available
+    await exec('git fetch --tags')
+
+    // Try with explicit tag reference format
     const {stdout, exitCode} = await getExecOutput(
-      `git rev-parse ${previousCommitTag}`,
+      `git rev-parse refs/tags/${previousCommitTag}`,
     )
 
     if (exitCode !== 0) {
-      setFailed('Tag not found. Aborting.')
+      setFailed(`Tag '${previousCommitTag}' not found. Aborting.`)
       return false
     }
 
